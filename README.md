@@ -26,7 +26,12 @@ A complete production-ready full-stack mobile application for capturing and orga
 - ✅ Real-time data synchronization
 
 ### Bonus Features
-- ✅ Interactive MapView with photo markers
+- ✅ **Interactive MapView with photo markers** - See all your photos on a map
+- ✅ **Photo location pins** - Circular photo markers showing exact photo locations
+- ✅ **Location name resolution** - Shows landmark names like "Saroda Rai University, Ahmedabad"
+- ✅ **Tap-to-view photo details** - Full-screen photo overlay with location info
+- ✅ **Real-time geocoding** - Converts GPS coordinates to readable addresses
+- ✅ **Consistent location display** - Map and home page show same location format
 - ✅ Delete entries with confirmation
 - ✅ Empty state UI components
 - ✅ Responsive design for all screen sizes
@@ -239,9 +244,16 @@ const API_URL = 'http://192.168.1.100:5000/api'; // Replace with your IP
 - **Location display** - Human-readable location names
 
 ### Map Features
-- **Interactive markers** - Photo locations on map
-- **Photo previews** - Thumbnail previews in markers
-- **Navigation** - Get directions to photo locations
+- **Interactive markers** - Photo locations on map with circular photo pins
+- **Photo markers** - Your photos displayed as circular markers on the map
+- **Location names** - Shows landmark names like "Saroda Rai University, Ahmedabad"
+- **Tap-to-view** - Tap markers to see full photo with location details
+- **Real-time geocoding** - Converts GPS coordinates to readable addresses
+- **Consistent display** - Same location format as home page
+- **Zoom controls** - Pan and zoom to explore photo locations
+- **User location** - Shows your current position on map
+- **Photo overlay** - Full-screen photo view with location information
+- **Exact coordinates** - Precise GPS location for each photo
 - **Zoom and pan** - Explore the map freely
 
 ## 🔐 Security Features

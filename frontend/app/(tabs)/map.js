@@ -6,6 +6,8 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Image,
+  TouchableOpacity,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { entryService } from '../services/entryService';
 import { COLORS, DIMENSIONS } from '../utils/constants';
+import { getLocationName } from '../utils/locationHelper';
 
 const { width, height } = Dimensions.get('window');
 
@@ -22,6 +25,7 @@ export default function MapScreen() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedEntry, setSelectedEntry] = useState(null);
+  const [selectedLocationName, setSelectedLocationName] = useState('');
   const [mapRegion, setMapRegion] = useState({
     latitude: 37.78825,
     longitude: -122.4324,
@@ -52,12 +56,12 @@ export default function MapScreen() {
       }
       
       console.log('Processed entries data:', entriesData);
-      
-      // Ensure data is an array
+       
+       // Ensure data is an array
       if (Array.isArray(entriesData)) {
         setEntries(entriesData);
-        
-        // Center map on first entry if available
+         
+         // Center map on first entry if available
         if (entriesData.length > 0) {
           const firstEntry = entriesData[0];
           
@@ -75,9 +79,14 @@ export default function MapScreen() {
             // Alternative format: { latitude, longitude }
             latitude = parseFloat(firstEntry.location.latitude);
             longitude = parseFloat(firstEntry.location.longitude);
+          } else if (firstEntry.latitude && firstEntry.longitude) {
+            // Direct coordinates on entry object
+            latitude = parseFloat(firstEntry.latitude);
+            longitude = parseFloat(firstEntry.longitude);
           }
           
           if (!isNaN(latitude) && !isNaN(longitude)) {
+            console.log('Centering map on:', { latitude, longitude });
             setMapRegion({
               latitude,
               longitude,
@@ -85,7 +94,7 @@ export default function MapScreen() {
               longitudeDelta: 0.0421,
             });
           } else {
-            console.warn('Invalid coordinates for first entry:', firstEntry.location);
+            console.warn('Invalid coordinates for first entry:', firstEntry);
           }
         }
       } else {
@@ -101,16 +110,24 @@ export default function MapScreen() {
     }
   };
 
-  const handleMarkerPress = useCallback((entry) => {
+  const handleMarkerPress = useCallback(async (entry) => {
     setSelectedEntry(entry);
-    Alert.alert(
-      entry.title || 'Photo Location',
-      `📍 ${entry.location?.name || 'Unknown Location'}\n📅 ${new Date(entry.createdAt).toLocaleDateString()}\n📝 ${entry.description || 'No description'}`,
-      [
-        { text: 'OK', style: 'default' },
-        { text: 'View Details', onPress: () => setSelectedEntry(null) }
-      ]
-    );
+    
+    // Get location name from coordinates
+    let locationText = '';
+    if (entry.location && entry.location.name) {
+      locationText = entry.location.name;
+    } else if (entry.latitude && entry.longitude) {
+      locationText = await getLocationName(entry.latitude, entry.longitude);
+    } else if (entry.location && entry.location.coordinates && Array.isArray(entry.location.coordinates)) {
+      const longitude = entry.location.coordinates[0];
+      const latitude = entry.location.coordinates[1];
+      locationText = await getLocationName(latitude, longitude);
+    } else if (entry.location && entry.location.lat && entry.location.lng) {
+      locationText = await getLocationName(entry.location.lat, entry.location.lng);
+    }
+    
+    setSelectedLocationName(locationText);
   }, []);
 
   const renderMarker = (entry) => {
@@ -129,6 +146,10 @@ export default function MapScreen() {
       // Alternative format: { latitude, longitude }
       latitude = parseFloat(entry.location.latitude);
       longitude = parseFloat(entry.location.longitude);
+    } else if (entry.latitude && entry.longitude) {
+      // Direct coordinates on entry object
+      latitude = parseFloat(entry.latitude);
+      longitude = parseFloat(entry.longitude);
     } else {
       console.warn('Invalid location format for entry:', entry);
       return null;
@@ -139,20 +160,39 @@ export default function MapScreen() {
       return null;
     }
     
+    // Create location description for marker - prioritize name first
+    let locationDescription = '';
+    if (entry.location && entry.location.name) {
+      locationDescription = entry.location.name;
+    } else if (entry.latitude && entry.longitude) {
+      getLocationName(entry.latitude, entry.longitude).then(name => {
+        locationDescription = name;
+      });
+      locationDescription = `${entry.latitude.toFixed(6)}, ${entry.longitude.toFixed(6)}`;
+    } else if (entry.location && entry.location.coordinates && Array.isArray(entry.location.coordinates)) {
+      const longitude = entry.location.coordinates[0];
+      const latitude = entry.location.coordinates[1];
+      getLocationName(latitude, longitude).then(name => {
+        locationDescription = name;
+      });
+      locationDescription = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+    }
+    
     // Use imageUrl if available, fallback to image
     const imageUri = entry.imageUrl || entry.image;
+    console.log('Marker image URI:', imageUri);
     
     return (
       <Marker
         key={entry._id || entry.id}
         coordinate={{ latitude, longitude }}
         title={entry.title || 'Photo'}
-        description={entry.location?.name || 'Unknown Location'}
+        description={locationDescription}
         onPress={() => handleMarkerPress(entry)}
       >
         <View style={styles.markerContainer}>
           <View style={styles.markerPin}>
-            <Ionicons name="location" size={16} color={COLORS.WHITE} />
+            <Ionicons name="location" size={18} color={COLORS.WHITE} />
           </View>
           <View style={styles.markerPhoto}>
             {imageUri && (
@@ -218,14 +258,17 @@ export default function MapScreen() {
             <View style={styles.photoInfo}>
               <Text style={styles.photoTitle}>{selectedEntry.title || 'Photo'}</Text>
               <Text style={styles.photoLocation}>
-                📍 {selectedEntry.location?.name || 'Unknown Location'}
+                📍 {selectedLocationName}
               </Text>
               <Text style={styles.photoDate}>
                 📅 {new Date(selectedEntry.createdAt).toLocaleDateString()}
               </Text>
               <TouchableOpacity
                 style={styles.closeButton}
-                onPress={() => setSelectedEntry(null)}
+                onPress={() => {
+                  setSelectedEntry(null);
+                  setSelectedLocationName('');
+                }}
               >
                 <Ionicons name="close" size={24} color={COLORS.WHITE} />
               </TouchableOpacity>
@@ -298,7 +341,7 @@ const styles = StyleSheet.create({
   },
   markerPhoto: {
     position: 'absolute',
-    top: -10,
+    bottom: -10,
     width: 40,
     height: 40,
     borderRadius: 20,
