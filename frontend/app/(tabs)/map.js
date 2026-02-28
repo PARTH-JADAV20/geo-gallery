@@ -36,21 +36,66 @@ export default function MapScreen() {
   const loadEntries = async () => {
     try {
       setLoading(true);
-      const data = await entryService.getEntries();
-      setEntries(data);
+      const response = await entryService.getEntries();
+      console.log('Map entries response:', response);
       
-      // Center map on first entry if available
-      if (data.length > 0) {
-        setMapRegion({
-          latitude: parseFloat(data[0].location.coordinates[1]),
-          longitude: parseFloat(data[0].location.coordinates[0]),
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        });
+      // Handle different response structures
+      let entriesData = [];
+      if (response && response.data && response.data.entries) {
+        entriesData = response.data.entries;
+      } else if (response && response.entries) {
+        entriesData = response.entries;
+      } else if (response && Array.isArray(response)) {
+        entriesData = response;
+      } else if (response && Array.isArray(response.data)) {
+        entriesData = response.data;
+      }
+      
+      console.log('Processed entries data:', entriesData);
+      
+      // Ensure data is an array
+      if (Array.isArray(entriesData)) {
+        setEntries(entriesData);
+        
+        // Center map on first entry if available
+        if (entriesData.length > 0) {
+          const firstEntry = entriesData[0];
+          
+          // Handle different coordinate formats
+          let latitude, longitude;
+          if (firstEntry.location && firstEntry.location.coordinates && Array.isArray(firstEntry.location.coordinates)) {
+            // Standard GeoJSON format: [longitude, latitude]
+            longitude = parseFloat(firstEntry.location.coordinates[0]);
+            latitude = parseFloat(firstEntry.location.coordinates[1]);
+          } else if (firstEntry.location && firstEntry.location.lat && firstEntry.location.lng) {
+            // Alternative format: { lat, lng }
+            latitude = parseFloat(firstEntry.location.lat);
+            longitude = parseFloat(firstEntry.location.lng);
+          } else if (firstEntry.location && firstEntry.location.latitude && firstEntry.location.longitude) {
+            // Alternative format: { latitude, longitude }
+            latitude = parseFloat(firstEntry.location.latitude);
+            longitude = parseFloat(firstEntry.location.longitude);
+          }
+          
+          if (!isNaN(latitude) && !isNaN(longitude)) {
+            setMapRegion({
+              latitude,
+              longitude,
+              latitudeDelta: 0.0922,
+              longitudeDelta: 0.0421,
+            });
+          } else {
+            console.warn('Invalid coordinates for first entry:', firstEntry.location);
+          }
+        }
+      } else {
+        console.warn('Entries data is not an array:', entriesData);
+        setEntries([]);
       }
     } catch (error) {
       console.error('Error loading entries:', error);
       Alert.alert('Error', 'Failed to load photo locations');
+      setEntries([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -69,12 +114,37 @@ export default function MapScreen() {
   }, []);
 
   const renderMarker = (entry) => {
-    const latitude = parseFloat(entry.location.coordinates[1]);
-    const longitude = parseFloat(entry.location.coordinates[0]);
+    // Handle different coordinate formats
+    let latitude, longitude;
+    
+    if (entry.location && entry.location.coordinates && Array.isArray(entry.location.coordinates)) {
+      // Standard GeoJSON format: [longitude, latitude]
+      longitude = parseFloat(entry.location.coordinates[0]);
+      latitude = parseFloat(entry.location.coordinates[1]);
+    } else if (entry.location && entry.location.lat && entry.location.lng) {
+      // Alternative format: { lat, lng }
+      latitude = parseFloat(entry.location.lat);
+      longitude = parseFloat(entry.location.lng);
+    } else if (entry.location && entry.location.latitude && entry.location.longitude) {
+      // Alternative format: { latitude, longitude }
+      latitude = parseFloat(entry.location.latitude);
+      longitude = parseFloat(entry.location.longitude);
+    } else {
+      console.warn('Invalid location format for entry:', entry);
+      return null;
+    }
+    
+    if (isNaN(latitude) || isNaN(longitude)) {
+      console.warn('Invalid coordinates:', { latitude, longitude });
+      return null;
+    }
+    
+    // Use imageUrl if available, fallback to image
+    const imageUri = entry.imageUrl || entry.image;
     
     return (
       <Marker
-        key={entry._id}
+        key={entry._id || entry.id}
         coordinate={{ latitude, longitude }}
         title={entry.title || 'Photo'}
         description={entry.location?.name || 'Unknown Location'}
@@ -85,9 +155,9 @@ export default function MapScreen() {
             <Ionicons name="location" size={16} color={COLORS.WHITE} />
           </View>
           <View style={styles.markerPhoto}>
-            {entry.image && (
+            {imageUri && (
               <Image
-                source={{ uri: entry.image }}
+                source={{ uri: imageUri }}
                 style={styles.markerImage}
                 resizeMode="cover"
               />
@@ -134,14 +204,14 @@ export default function MapScreen() {
         followsUserLocation={false}
         loadingEnabled={true}
       >
-        {entries.map(renderMarker)}
+        {entries && entries.length > 0 && entries.map(renderMarker)}
       </MapView>
       
       {selectedEntry && (
         <BlurView intensity={80} style={styles.photoOverlay}>
           <View style={styles.photoContainer}>
             <Image
-              source={{ uri: selectedEntry.image }}
+              source={{ uri: selectedEntry.imageUrl || selectedEntry.image }}
               style={styles.photoImage}
               resizeMode="cover"
             />
